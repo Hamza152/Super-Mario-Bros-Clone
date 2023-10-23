@@ -49,7 +49,7 @@ global_variable uint8 Green = 173;
 global_variable uint8 Blue = 255;
 global_variable uint32 ZoneColor = ((Red << 16) | (Green << 8) | Blue);
 
-global_variable char MarioLevelFileName[] = "..\\levels\\MyLevel.txt";
+global_variable char MarioLevelFileName[] = "..\\levels\\FirstLevel.txt";
 global_variable char MarioSpritesFileName[] = "../sprites/mariobros.png";
 global_variable uint32* MarioSpritesImage = NULL;
 global_variable char StaticObjectsFileName[] = "..\\sprites\\tileset.png";
@@ -117,7 +117,8 @@ enum {
     STANDING,
     HANGING,
     DYING,
-    SHROOM
+    SHROOM,
+    MARIOIMGSNBR
 };
 enum {
     BRICK,
@@ -142,11 +143,12 @@ enum {
     POLEUP,
     POLEDOWN,
     FLAG,
-    TILESNBR = FLAG + 3
+    STATOBJNBR
 };
 enum{
     WORM = 0,
-    TURTLE = 3
+    TURTLE = 3,
+    ENEMIESNBR
 };
 
 // for the sprites
@@ -218,12 +220,21 @@ struct Point {
     }
 };
 
+global_variable const int MarioImagesNbr = 18;
+global_variable const int StaticObjectsImgsNbr = 23;
+global_variable int const EnemiesImgsNbr = 6;
+global_variable int const BackgroundImgsNbr = 45;
+
 Point MouseCoords = { 0,0 };
 POINT MouseRealCoords;
 
 Point SpriteSelectedItem;
 Point GridSelectedItem = { -1, -1 };
-Point mapping[TILESNBR];
+Point TileMapping[STATOBJNBR];
+Point EnemyMapping[ENEMIESNBR];
+Point MarioMapping[MARIOIMGSNBR];
+Point BgndMapping[BackgroundImgsNbr];
+
 Point ShroomsPositions[10];
 
 
@@ -240,10 +251,6 @@ struct ExtractAndDisplayInfo {
     }
 };
 
-global_variable const int MarioImagesNbr = 18;
-global_variable const int StaticObjectsImgsNbr = 23;
-global_variable int const EnemiesImgsNbr = 6;
-global_variable int const BackgroundImgsNbr = 45;
 
 global_variable ExtractAndDisplayInfo* AllImagesInfo[4];
 
@@ -513,11 +520,6 @@ LoadMainGridFromFIle()
     int StatObjNbro = 0;
     int EnemiesNbro = 0;
     int BgndNbro = 0;
-
-    LPVOID  MyObjTypePtr = (void*)(&MyObjType);
-    LPVOID  ObjectIdentifierPtr = (void*)(&ObjectIdentifier);
-    LPVOID  XPosPtr = (void*)(&XPos);
-    LPVOID  YPosPtr = (void*)(&YPos);
     LPVOID ShroomsNbrPtr = (void*)&ShroomsNbr;
     LPVOID EnemiesNbroPtr = (void*)&EnemiesNbro;
     LPVOID StatObjNbroPtr = (void*)&StatObjNbro;
@@ -573,8 +575,18 @@ LoadMainGridFromFIle()
         int EnemiesIndex = 0;
         int BgndIndex = 0;
 
+        LPVOID  MyObjTypePtr = (void*)(&MyObjType);
+        LPVOID  ObjectIdentifierPtr = (void*)(&ObjectIdentifier);
+        LPVOID  XPosPtr = (void*)(&XPos);
+        LPVOID  YPosPtr = (void*)(&YPos);
+
         while (i < EnemiesNbro + StatObjNbro + BgndNbro + 1)
         {
+            if (i == 425)
+            {
+                int dumbos = 51;
+                dumbos++;
+            }
             ReadFile(ReadFileHnd,
                 MyObjTypePtr,
                 sizeof(MyObjType),
@@ -602,10 +614,23 @@ LoadMainGridFromFIle()
             int k = XPos / 16;
             int l = (YPos % 16 == 0) ? YPos / 16 : YPos / 16 + 1;
             MainGridInfo[k][l].IsEmpty = false;
-            if (MyObjType == 2)
-                MainGridInfo[k][l].SpriteElet = { 0, SpritesBlocksNbrV - 1 };
-            else
-                MainGridInfo[k][l].SpriteElet = mapping[ObjectIdentifier];
+
+            switch(MyObjType)
+            {
+            case 0:
+                MainGridInfo[k][l].SpriteElet = TileMapping[ObjectIdentifier];
+                break;
+            case 1:
+                MainGridInfo[k][l].SpriteElet = EnemyMapping[ObjectIdentifier];
+                break;
+            case 2:
+                MainGridInfo[k][l].SpriteElet = MarioMapping[ObjectIdentifier];
+                break;
+            case 3:
+                MainGridInfo[k][l].SpriteElet = BgndMapping[ObjectIdentifier];
+                break;
+
+            }
             i++;
         }
 
@@ -667,97 +692,99 @@ Initialise()
         SpritesGrid[EditorXPos][EditorYPos].Type = BACKGROUND;
         SpritesGrid[EditorXPos][EditorYPos].Identifier = i;
         SpritesGrid[EditorXPos][EditorYPos].IsEmpty = false;
+        BgndMapping[i] = { EditorXPos, EditorYPos };
 
     }
 
     SpritesGrid[1][10].Type = TILE;
     SpritesGrid[1][10].Identifier = POLEUP;
     SpritesGrid[1][10].IsEmpty = false;
-    mapping[POLEUP] = { 1,10 };
+    TileMapping[POLEUP] = { 1,10 };
 
     SpritesGrid[2][10].Type = TILE;
     SpritesGrid[2][10].Identifier = POLEDOWN;
     SpritesGrid[2][10].IsEmpty = false;
-    mapping[POLEDOWN] = { 2,10 };
+    TileMapping[POLEDOWN] = { 2,10 };
 
     SpritesGrid[0][10].Type = TILE;
     SpritesGrid[0][10].Identifier = SHROOM;
     SpritesGrid[0][10].IsEmpty = false;
-    mapping[SHROOM] = { 0,10 };
+    MarioMapping[SHROOM] = { 0,10 };
 
     SpritesGrid[0][9].Type = TILE;
     SpritesGrid[0][9].Identifier = BRICK;
     SpritesGrid[0][9].IsEmpty = false;
-    mapping[BRICK] = { 0,9 };
+    TileMapping[BRICK] = { 0,9 };
 
     SpritesGrid[1][9].Type = TILE;
     SpritesGrid[1][9].Identifier = BRICK2;
     SpritesGrid[1][9].IsEmpty = false;
-    mapping[BRICK2] = { 1,9 };
+    TileMapping[BRICK2] = { 1,9 };
 
     SpritesGrid[2][9].Type = TILE;
     SpritesGrid[2][9].Identifier = BRICK3;
     SpritesGrid[2][9].IsEmpty = false;
-    mapping[BRICK3] = { 2,9 };
+    TileMapping[BRICK3] = { 2,9 };
 
     SpritesGrid[3][9].Type = TILE;
     SpritesGrid[3][9].Identifier = QM;
     SpritesGrid[3][9].IsEmpty = false;
-    mapping[QM] = { 3,9 };
+    TileMapping[QM] = { 3,9 };
 
     SpritesGrid[4][9].Type = TILE;
     SpritesGrid[4][9].Identifier = VTUBETL;
     SpritesGrid[4][9].IsEmpty = false;
-    mapping[VTUBETL] = { 4,9 };
+    TileMapping[VTUBETL] = { 4,9 };
 
     SpritesGrid[5][9].Type = TILE;
     SpritesGrid[5][9].Identifier = VTUBETR;
     SpritesGrid[5][9].IsEmpty = false;
-    mapping[VTUBETR] = { 5,9 };
+    TileMapping[VTUBETR] = { 5,9 };
 
     SpritesGrid[4][10].Type = TILE;
     SpritesGrid[4][10].Identifier = VTUBEBL;
     SpritesGrid[4][10].IsEmpty = false;
-    mapping[VTUBEBL] = { 4,10 };
+    TileMapping[VTUBEBL] = { 4,10 };
 
     SpritesGrid[5][10].Type = TILE;
     SpritesGrid[5][10].Identifier = VTUBEBR;
     SpritesGrid[5][10].IsEmpty = false;
-    mapping[VTUBEBR] = { 5,10 };
+    TileMapping[VTUBEBR] = { 5,10 };
 
     SpritesGrid[6][9].Type = TILE;
     SpritesGrid[6][9].Identifier = HTUBETL;
     SpritesGrid[6][9].IsEmpty = false;
-    mapping[HTUBETL] = { 6,9 };
+    TileMapping[HTUBETL] = { 6,9 };
 
     SpritesGrid[7][9].Type = TILE;
     SpritesGrid[7][9].Identifier = HTUBETR;
     SpritesGrid[7][9].IsEmpty = false;
-    mapping[HTUBETR] = { 7,9 };
+    TileMapping[HTUBETR] = { 7,9 };
 
     SpritesGrid[6][10].Type = TILE;
     SpritesGrid[6][10].Identifier = HTUBEBL;
     SpritesGrid[6][10].IsEmpty = false;
-    mapping[HTUBEBL] = { 6,10 };
+    TileMapping[HTUBEBL] = { 6,10 };
 
     SpritesGrid[7][10].Type = TILE;
     SpritesGrid[7][10].Identifier = HTUBEBR;
     SpritesGrid[7][10].IsEmpty = false;
-    mapping[HTUBEBR] = { 7,10 };
+    TileMapping[HTUBEBR] = { 7,10 };
 
     SpritesGrid[0][14].Type = ENEMY;
     SpritesGrid[0][14].Identifier = WORM;
     SpritesGrid[0][14].IsEmpty = false;
-    mapping[WORM] = { 0,14 };
+    EnemyMapping[WORM] = { 0,14 };
 
     SpritesGrid[1][14].Type = ENEMY;
     SpritesGrid[1][14].Identifier = TURTLE;
     SpritesGrid[1][14].IsEmpty = false;
-    mapping[TURTLE] = { 1,14 };
+    EnemyMapping[TURTLE] = { 1,14 };
 
     SpritesGrid[0][SpritesBlocksNbrV - 1].Type = MARIO;
     SpritesGrid[0][SpritesBlocksNbrV - 1].Identifier = STANDING;
     SpritesGrid[0][SpritesBlocksNbrV - 1].IsEmpty = false;
+    MarioMapping[STANDING] = { 0, SpritesBlocksNbrV - 1 };
 }
 
 internal void 
@@ -972,6 +999,8 @@ HandleUserInput()
                 {
                     Point EletCoords = MainGridInfo[i][j].SpriteElet;
                     char ObjType = 0;
+                    int ObjectIdentifier = SpritesGrid[EletCoords.X][EletCoords.Y].Identifier;
+
                     int HeightOffset = 0;
                     if (SpritesGrid[EletCoords.X][EletCoords.Y].Type == TILE)
                         EditorStaticObjectsNbr++;
@@ -979,7 +1008,7 @@ HandleUserInput()
                     {
                         EditorEnemiesNbr++;
                         ObjType = 1;
-                        if (SpritesGrid[EletCoords.X][EletCoords.Y].Identifier == TURTLE)
+                        if (ObjectIdentifier == TURTLE)
                             HeightOffset = AllImagesInfo[ENEMY][TURTLE].OriginalSize.Height - 16;
                     }
                     else if (SpritesGrid[EletCoords.X][EletCoords.Y].Type == MARIO)
@@ -989,7 +1018,6 @@ HandleUserInput()
                         ObjType = 3;
                         EditorBgndNbr++;
                     }
-
 
                     DWORD NumBytesWritten;
 
@@ -1002,7 +1030,7 @@ HandleUserInput()
                         NULL
                     );
 
-                    int ObjectIdentifier = SpritesGrid[EletCoords.X][EletCoords.Y].Identifier;
+
                     LPVOID ObjectIdentifierPtr = (void*)(&ObjectIdentifier);
                     WriteFile(
                         FileHnd,

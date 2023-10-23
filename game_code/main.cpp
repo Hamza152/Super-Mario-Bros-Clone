@@ -7,6 +7,7 @@
 #include <fstream>
 #include <map>
 #include <queue>
+#include <algorithm>
 
 #define internal static 
 #define local_persist static 
@@ -37,7 +38,7 @@ global_variable uint32 Grey = 0x00b4b4b4;
 // Displayed Bitmap declaration
 global_variable BITMAPINFO BitmapInfo;
 global_variable void *BitmapMemory;
-global_variable float BitmapXPosition = 0; 
+global_variable float BitmapXPosition = 0;  
 global_variable int BitmapWidth = 1000;
 global_variable int BitmapHeight = 800;
 global_variable int BytesPerPixel = 4;
@@ -50,7 +51,7 @@ global_variable double ShroomJumpTimeCounter = 0;
 global_variable double LoopTime = 0;
 
 // Sprites
-global_variable char MarioLevelFileName[] = "..\\levels\\Level1.txt";
+global_variable char MarioLevelFileName[] = "..\\levels\\FirstLevel.txt";
 global_variable char MarioSpritesFileName[] = "../sprites/mariobros.png";
 global_variable uint32 *MarioSpritesImage = NULL;
 global_variable char StaticObjectsFileName[] = "..\\sprites\\tileset.png";
@@ -281,6 +282,7 @@ POINT MouseRealCoords;
 struct CoinBrickMvtStruct {
     Point InitialPos;
     float Vel;
+    RealPoint LastPos;
     RealPoint RealPos;
     bool StartedLaunching = false;
     bool HeightCheckOn = false;
@@ -909,9 +911,18 @@ TreatCollisions()
 
             if (Mario.CurrentPosition.X + MarioWidth - 2  > Brick[i].TopLeft.X && Mario.CurrentPosition.X < Brick[i].TopLeft.X + BrickWidth - 2)
             {
-                if (Mario.CurrentPosition.Y <= Brick[i].TopLeft.Y + BrickHeight && Mario.LastPosition.Y >= Brick[i].TopLeft.Y + BrickHeight)
+                float BrickLastYPos = Brick[i].TopLeft.Y;
+                float BrickCurrYPos = Brick[i].TopLeft.Y;
+                std::vector<int>::iterator it = std::find(ShakyBricksIndices.begin(), ShakyBricksIndices.end(), i);
+                if (it != ShakyBricksIndices.end())
                 {
-                    Mario.CurrentPosition.Y = Brick[i].TopLeft.Y + BrickHeight;
+                    BrickLastYPos = BricksToShakeInfo[it - ShakyBricksIndices.begin()].LastPos.Y;
+                    BrickCurrYPos = BricksToShakeInfo[it - ShakyBricksIndices.begin()].RealPos.Y;
+
+                }
+                if (Mario.CurrentPosition.Y <= BrickCurrYPos + BrickHeight && Mario.LastPosition.Y >= BrickLastYPos + BrickHeight)
+                {
+                    Mario.CurrentPosition.Y = BrickCurrYPos + BrickHeight;
                     Mario.Velocity.Y = 0;
                     if (Brick[i].HasMushroom)
                     {
@@ -938,7 +949,7 @@ TreatCollisions()
                             NewCoin.RealPos = { float(Brick[i].TopLeft.X), float(Brick[i].TopLeft.Y) };
                             NewCoin.InitialPos = Brick[i].TopLeft;
                             CoinsToLaunchInfo.push_back(NewCoin);
-
+                         
                             CoinBrickMvtStruct ShakeInfo;
                             ShakeInfo.Vel = -70;
                             ShakeInfo.RealPos = { float(Brick[i].TopLeft.X), float(Brick[i].TopLeft.Y) };
@@ -975,13 +986,22 @@ TreatCollisions()
                             }
                             else
                             {
-                                CoinBrickMvtStruct ShakeInfo;
-                                ShakeInfo.Vel = -70;
-                                ShakeInfo.RealPos = { float(Brick[i].TopLeft.X), float(Brick[i].TopLeft.Y) };
-                                ShakeInfo.InitialPos = Brick[i].TopLeft;
-                                BricksToShakeInfo.push_back(ShakeInfo);
-                                ShakyBricksIndices.push_back(i);
-
+                                std::vector<int>::iterator it = std::find(ShakyBricksIndices.begin(), ShakyBricksIndices.end(), i);
+                                if (it != ShakyBricksIndices.end())
+                                {
+                                    int elet_index = it - ShakyBricksIndices.begin();
+                                    BricksToShakeInfo[elet_index].Vel = -70;
+                                    BricksToShakeInfo[elet_index].RealPos = { float(Brick[i].TopLeft.X), float(Brick[i].TopLeft.Y) };
+                                }
+                                else
+                                {
+                                    CoinBrickMvtStruct ShakeInfo;
+                                    ShakeInfo.Vel = -70;
+                                    ShakeInfo.RealPos = { float(Brick[i].TopLeft.X), float(Brick[i].TopLeft.Y) };
+                                    ShakeInfo.InitialPos = Brick[i].TopLeft;
+                                    BricksToShakeInfo.push_back(ShakeInfo);
+                                    ShakyBricksIndices.push_back(i);
+                                }
                                 PlaySound(TEXT("../sounds/smb_bump.wav"), NULL, SND_FILENAME | SND_ASYNC);
                             }
                         }
@@ -1185,7 +1205,7 @@ TreatShakyBreakyBricks() {
                 }
 
         }
-        float LastYPos = BricksToShakeInfo[k].RealPos.Y;
+        BricksToShakeInfo[k].LastPos.Y = BricksToShakeInfo[k].RealPos.Y;
         BricksToShakeInfo[k].Vel += Gravity * LoopTime;
         BricksToShakeInfo[k].RealPos.Y += BricksToShakeInfo[k].Vel * LoopTime;
         Brick[i].TopLeft.Y = int(BricksToShakeInfo[k].RealPos.Y);
@@ -1195,16 +1215,20 @@ TreatShakyBreakyBricks() {
             BricksToShakeInfo.erase(BricksToShakeInfo.begin() + k);
             ShakyBricksIndices.erase(ShakyBricksIndices.begin() + k);
         }
+        float LastYPos = BricksToShakeInfo[k].LastPos.Y;
 
         for(int l = 0; l < ShroomsInfo.size(); l++)
         {
-            if (Brick[i].TopLeft.Y < ShroomsInfo[l].Position.Y + 16 && LastYPos >= ShroomsInfo[l].Position.Y + 16)
+            if (ShroomsInfo[l].Position.X + 16 > Brick[i].TopLeft.X  && ShroomsInfo[l].Position.X <= Brick[i].TopLeft.X + 16)
             {
-                ShroomsInfo[l].Position.Y = Brick[i].TopLeft.Y - 16;
-                if (ShroomsInfo[l].Position.X < Brick[i].TopLeft.X + 8 && ShroomsInfo[l].Vel.X > 0)
-                    ShroomsInfo[l].Vel.X = -ShroomsInfo[l].Vel.X;
-                if (ShroomsInfo[l].Position.X > Brick[i].TopLeft.X + 8 && ShroomsInfo[l].Vel.X < 0)
-                    ShroomsInfo[l].Vel.X = -ShroomsInfo[l].Vel.X;
+                if (BricksToShakeInfo[k].RealPos.Y < ShroomsInfo[l].Position.Y + 16 && LastYPos >= ShroomsInfo[l].Position.Y + 16)
+                {
+                    ShroomsInfo[l].Position.Y = Brick[i].TopLeft.Y - 16;
+                    if (ShroomsInfo[l].Position.X < Brick[i].TopLeft.X + 8 && ShroomsInfo[l].Vel.X > 0)
+                        ShroomsInfo[l].Vel.X = -ShroomsInfo[l].Vel.X;
+                    if (ShroomsInfo[l].Position.X > Brick[i].TopLeft.X + 8 && ShroomsInfo[l].Vel.X < 0)
+                        ShroomsInfo[l].Vel.X = -ShroomsInfo[l].Vel.X;
+                }
             }
         }
     }
@@ -1327,7 +1351,7 @@ AnimateShrooms() {
                 ShroomsInfo[i].Position.Y = ShroomsInfo[i].InitialPos.Y - ShroomHeight;
                 ShroomsInfo[i].LastPosition = ShroomsInfo[i].Position;
                 ShroomsInfo[i].Vel.Y = 0;
-                ShroomsInfo[i].Vel.X = 50;
+                ShroomsInfo[i].Vel.X = 45;
             }
         }
         else
@@ -1342,7 +1366,7 @@ AnimateShrooms() {
 
             for (int j = 0; j < StaticObjectsNbr; j++)
             {
-                // check if shroom is in Brick's width range and colliding with it vertically, vertical collision of Shroom can only happen in one direction : up to bottom
+                // check if shroom is in Brick's width range and colliding with it vertically, here i treat : up to bottom
                 if (ShroomsInfo[i].Position.X < Brick[j].TopLeft.X + ShroomWidth && ShroomsInfo[i].Position.X + ShroomWidth > Brick[j].TopLeft.X)
                 {
                     if (ShroomsInfo[i].Position.Y + ShroomHeight > Brick[j].TopLeft.Y && ShroomsInfo[i].LastPosition.Y + ShroomHeight <= Brick[j].TopLeft.Y)
@@ -1544,21 +1568,18 @@ InitialiseGamePrams()
     int  ObjectIdentifier = 0;
     int  XPos = 0;
     int  YPos = 0;
-    int StatObjNbro = 0;
-    int EnemiesNbro = 0;
-    int BgndNbro = 0;
     char ShroomsNbr = 0;
-    Point ShroomsPositions[10];
+    Point ShroomsPositions[100];
 
     LPVOID  MyObjTypePtr = (void*)(&MyObjType);
     LPVOID  ObjectIdentifierPtr = (void*)(&ObjectIdentifier);
     LPVOID  XPosPtr = (void*)(&XPos);
     LPVOID  YPosPtr = (void*)(&YPos);
     LPVOID ShroomsNbrPtr = (void*)&ShroomsNbr;
-    LPVOID EnemiesNbroPtr = (void*)&EnemiesNbro;
-    LPVOID StatObjNbroPtr = (void*)&StatObjNbro;
-    LPVOID BgndNbroPtr = (void*)&BgndNbro;
-
+    
+    LPVOID EnemiesNbroPtr = (void*)&EnemiesNbr;
+    LPVOID StatObjNbroPtr = (void*)&StaticObjectsNbr;
+    LPVOID BgndNbroPtr = (void*)&BgndNbr;
 
     HANDLE ReadFileHnd = CreateFileA(MarioLevelFileName,
         GENERIC_READ,
@@ -1571,33 +1592,27 @@ InitialiseGamePrams()
 
     if (ReadFileHnd != INVALID_HANDLE_VALUE) {
 
-
-
         DWORD BytesRead = 1;
         int FileSizeInBytes = GetFileSize(ReadFileHnd, NULL);
         SetFilePointer(ReadFileHnd, FileSizeInBytes - 12, NULL, 0);
         ReadFile(ReadFileHnd,
             EnemiesNbroPtr,
-            sizeof(EnemiesNbro),
+            sizeof(EnemiesNbr),
             &BytesRead,
             NULL);
         ReadFile(ReadFileHnd,
             StatObjNbroPtr,
-            sizeof(StatObjNbro),
+            sizeof(StaticObjectsNbr),
             &BytesRead,
             NULL);
         ReadFile(ReadFileHnd,
             BgndNbroPtr,
-            sizeof(BgndNbro),
+            sizeof(BgndNbr),
             &BytesRead,
             NULL);
-        Enemies = new Enemy[EnemiesNbro];
-        Brick = new StaticObject[StatObjNbro];
-        Bgnd = new BgndObject[BgndNbro];
-        EnemiesNbr = EnemiesNbro;
-        StaticObjectsNbr = StatObjNbro;
-        BgndNbr = BgndNbro;
-
+        Enemies = new Enemy[EnemiesNbr];
+        Brick = new StaticObject[StaticObjectsNbr];
+        Bgnd = new BgndObject[BgndNbr];
         SetFilePointer(ReadFileHnd, 0, NULL, 0);
 
         ReadFile(ReadFileHnd,
@@ -2169,7 +2184,6 @@ WinMain(HINSTANCE Instance,
                     if (Mario.FinishedLevel)
                     {
                         HandleMarioLevelFinish();
-                        Mario.ImageToShowIndx = Mario.IsBig ? Mario.ImageToShowIndx - 8 : Mario.ImageToShowIndx;
                         TreatCollisions();
 
                     }
